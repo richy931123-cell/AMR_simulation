@@ -1,0 +1,83 @@
+function [cmd_w_L, cmd_w_R, current_state] = fcn(X, Y, Theta, target_X, target_Y, target_Yaw, dL, dR)
+    persistent state;
+    persistent err_sum; 
+
+    if X == 0 && Y == 0 || isempty(state)
+        state = 1;
+        err_sum = 0.0; 
+    end
+    
+    dx = target_X - X; dy = target_Y - Y;
+    dist = sqrt(dx^2 + dy^2);
+    
+    yaw_error = atan2(sin(target_Yaw - Theta), cos(target_Yaw - Theta));
+
+    V = 0.0; W = 0.0;
+
+    switch state
+        case 1 
+            if dist < 0.8
+                state = 2; 
+            else
+                target_theta = atan2(dy, dx);
+                alpha = atan2(sin(target_theta - Theta), cos(target_theta - Theta));
+                V = min(dist * 0.2, 0.25); 
+                W = max(min(alpha * 6.0, 3.0), -3.0);
+            end
+
+        case 2 
+            if dist < 0.05 && abs(yaw_error) < 0.2
+                state = 3; 
+            else
+                if dist > 0.05
+                    target_theta = atan2(dy, dx);
+                    alpha = atan2(sin(target_theta - Theta), cos(target_theta - Theta));
+                    V = max(min(dist * 0.5, 0.15), 0.05); 
+                    W = max(min(alpha * 5.0, 2.0), -2.0);
+                else
+                    V = 0.0;
+                    W = max(min(yaw_error * 3.0, 1.5), -1.5);
+                end
+            end
+
+        case 3 % 【HC-SR04 超音波 PI 控制與尋牆模式】
+            us_diff = dR - dL;
+            us_avg = (dL + dR) / 2;
+            target_stop_dist = 0.05; 
+
+            % 🌟 關鍵修復：啟動「雷達尋牆模式」
+            if dL > 5.0 || dR > 5.0
+                % 如果超音波瞎了 (收不到回波)，代表陀螺儀飄移太嚴重
+                % 讓車子像雷達一樣「原地慢速旋轉掃描」，直到重新捕捉到牆壁！
+                V = 0.0; 
+                W = 0.5; % 給予一個慢速的角速度來找牆壁
+            else
+                % 捕捉到牆壁了！開始用 PI 抵銷陀螺儀幻覺，強制拉平車身
+                err_sum = err_sum + us_diff;
+                err_sum = max(min(err_sum, 100.0), -100.0);
+
+                if abs(us_diff) <= 0.005 && abs(us_avg - target_stop_dist) <= 0.01
+                    state = 4; 
+                else
+                    if abs(us_diff) > 0.005
+                        V = 0.0;               
+                        W = us_diff * 10.0 + err_sum * 0.02; 
+                        W = max(min(W, 1.5), -1.5);
+                    else
+                        W = us_diff * 3.0 + err_sum * 0.01;               
+                        V = (us_avg - target_stop_dist) * 1.0; 
+                        V = max(min(V, 0.05), -0.05); 
+                    end
+                end
+            end
+
+        case 4 
+            V = 0.0; W = 0.0;
+            err_sum = 0.0; 
+    end
+
+    R = 0.065; L = 0.38;
+    cmd_w_L = (V - (W * L / 2)) / R;
+    cmd_w_R = (V + (W * L / 2)) / R;
+    current_state = state;
+end
