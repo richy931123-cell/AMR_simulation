@@ -1,0 +1,49 @@
+function [dL, dR] = fcn(X, Y, Theta, target_Y)
+    % ====================================================
+    % 真實物理世界：HC-SR04 超音波感測器模擬
+    % ====================================================
+    wall_Y = target_Y + 0.3; 
+    
+    % HC-SR04 物理特性參數
+    max_range = 4.0;    % 最大量測距離 4m
+    min_range = 0.02;   % 最小量測距離 2cm (盲區)
+    fov_limit = 15 * (pi/180); % 探測角極限 15度
+    resolution = 0.003; % 硬體解析度 3mm
+    
+    % 計算車頭與牆面法向量的夾角 (車頭朝上 pi/2)
+    angle_error = abs(Theta - pi/2);
+    
+    % 只有當車頭夾角小於 15度 時，超音波才收得到回波
+    if angle_error < fov_limit && sin(Theta) > 0.1
+        y_L = Y + 0.25*sin(Theta) + 0.1*cos(Theta);
+        y_R = Y + 0.25*sin(Theta) - 0.1*cos(Theta);
+        
+        true_dL = (wall_Y - y_L) / sin(Theta);
+        true_dR = (wall_Y - y_R) / sin(Theta);
+        
+        % 限制在 2cm ~ 400cm 範圍內
+        if true_dL > max_range || true_dL < min_range
+            true_dL = 9.99; 
+        end
+        if true_dR > max_range || true_dR < min_range
+            true_dR = 9.99; 
+        end
+        
+        % 🌟 模擬 HC-SR04 的 3mm 階梯式訊號與微小熱雜訊
+        if true_dL ~= 9.99
+            dL = round(true_dL / resolution) * resolution + (0.001 * randn());
+        else
+            dL = 9.99;
+        end
+        
+        if true_dR ~= 9.99
+            dR = round(true_dR / resolution) * resolution + (0.001 * randn());
+        else
+            dR = 9.99;
+        end
+    else
+        % 車頭太歪，產生「鏡面反射」收不到訊號
+        dL = 9.99; 
+        dR = 9.99; 
+    end
+end
