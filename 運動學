@@ -1,0 +1,42 @@
+function [X, Y, Theta] = fcn(w_L, w_R, dt)
+% =========================================================================
+% 🏎️ 原始完整版：AMR 真實運動學與里程計積分 (左右輪 100% 完美對稱版)
+% =========================================================================
+persistent p_X p_Y p_Theta;
+
+% 系統開機初始化 (從原點出發，車頭朝向正上方 90 度)
+if isempty(p_X)
+    p_X = 0.0;
+    p_Y = 0.0;
+    p_Theta = pi/2; % 初始朝向正上方 (90度 或 pi/2 弧度)
+end
+
+% 避免一開始模擬時間步長 dt 為 0 導致除錯錯誤的防呆
+if dt <= 0
+    safe_dt = 0.01;
+else
+    safe_dt = dt;
+end
+
+% 車體實體物理參數 (輪子半徑 0.065m，輪距 0.38m)
+R = 0.065; 
+L = 0.38;
+
+% 🌟 核心修正：左右輪皆為 100% 完美出力，消除實車殘疾偏置
+actual_w_R = w_R * 1.0; 
+actual_w_L = w_L;
+
+% 正運動學 (Forward Kinematics) 差速幾何模型
+V = (actual_w_R + actual_w_L) * R / 2;
+W = (actual_w_R - actual_w_L) * R / L;
+
+% 歐拉時序積分更新絕對位姿狀態
+p_X = p_X + V * cos(p_Theta) * safe_dt;
+p_Y = p_Y + V * sin(p_Theta) * safe_dt;
+p_Theta = p_Theta + W * safe_dt;
+
+% 輸出實體空間的絕對座標回傳給系統
+X = p_X;
+Y = p_Y;
+Theta = p_Theta;
+end
