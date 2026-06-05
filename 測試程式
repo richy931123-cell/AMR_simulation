@@ -1,0 +1,74 @@
+% ==========================================
+% 1. 自動執行 Simulink 模擬
+% ==========================================
+disp('開始執行 AGV 長距離 (5,5) 壓力測試...');
+out = sim('AMR_simulation_test'); 
+disp('模擬完成！準備播放 2D 動畫...');
+
+% ==========================================
+% 2. 讀取數據與格式防呆
+% ==========================================
+x_pos = out.X_data;
+y_pos = out.Y_data;
+theta = out.Theta_data; 
+
+% 讀取狀態機 (確保你方塊圖有把 current_state 接到 simout)
+if isa(out.simout, 'timeseries')
+    state_data = squeeze(out.simout.Data);
+elseif isstruct(out.simout)
+    state_data = out.simout.signals.values;
+else
+    state_data = squeeze(out.simout);
+end
+
+% ==========================================
+% 3. 建立畫布與環境設定 (擴大視野)
+% ==========================================
+car_L = 0.54; car_W = 0.34;
+
+figure('Name', 'AGV 長距離感測器融合測試', 'Color', 'w');
+hold on; grid on; axis equal;
+% 🌟 畫布範圍放大，才看得到車子開去 (5,5)
+xlim([-1, 7]); ylim([-1, 7]);
+title('AGV 自動輔助停車：(5,5) 長距離飄移與超音波修正');
+xlabel('X (m)'); ylabel('Y (m)');
+
+% 🌟 畫出新的牆壁與目標點
+% 目標在 Y=5，所以牆壁在 Y=5.3。牆壁長度延伸到 X=7
+plot([-1, 7], [5.3, 5.3], 'k-', 'LineWidth', 12);
+text(1.0, 5.6, '模擬牆壁 (Wall)', 'FontSize', 12, 'FontWeight', 'bold');
+
+% 新的 ArUco 目標點在 (5,5)
+scatter(5, 5, 100, 'red', 'filled');
+plot([5, 5], [5, 5.3], 'r--', 'LineWidth', 2);
+text(5.2, 4.8, 'ArUco 目標點', 'FontSize', 11);
+
+% 建立動畫物件
+traj_line = plot(x_pos(1), y_pos(1), 'k--', 'LineWidth', 1.5, 'Color', [0.5 0.5 0.5]); 
+car_body = patch(0, 0, 'blue', 'FaceAlpha', 0.3);
+car_head = plot(0, 0, 'r-', 'LineWidth', 3);
+state_text = text(0, 0, '', 'FontSize', 12, 'FontWeight', 'bold', 'Color', 'b');
+
+% ==========================================
+% 4. 播放動畫
+% ==========================================
+step = max(1, floor(length(x_pos)/150)); 
+
+for i = 1:step:length(x_pos) 
+    cx = x_pos(i); cy = y_pos(i); th = theta(i);
+    current_st = state_data(i); 
+    
+    set(traj_line, 'XData', x_pos(1:i), 'YData', y_pos(1:i));
+    
+    dx = [-car_L/2, car_L/2, car_L/2, -car_L/2];
+    dy = [-car_W/2, -car_W/2, car_W/2, car_W/2];
+    rx = cx + dx*cos(th) - dy*sin(th);
+    ry = cy + dx*sin(th) + dy*cos(th);
+    
+    set(car_body, 'XData', rx, 'YData', ry);
+    set(car_head, 'XData', [cx, cx + (car_L/2)*cos(th)], 'YData', [cy, cy + (car_L/2)*sin(th)]);
+    set(state_text, 'Position', [cx + 0.3, cy - 0.3], 'String', ['State: ', num2str(current_st)]);
+    
+    drawnow;
+end
+set(traj_line, 'XData', x_pos, 'YData', y_pos);
