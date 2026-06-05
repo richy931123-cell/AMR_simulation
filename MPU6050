@@ -1,0 +1,33 @@
+function [ax, ay, az, gz] = fcn(w_L, w_R, dt)
+    % 記憶前一刻的速度，用來計算加速度
+    persistent prev_V;
+    if isempty(prev_V)
+        prev_V = 0.0; 
+    end
+
+    % 1. 計算真實的線性速度 (V) 與角速度 (W)
+    R = 0.065; 
+    L = 0.38;  
+    V = (w_R + w_L) * R / 2;
+    true_W = (w_R - w_L) * R / L; % 這就是真實的 Z 軸角速度
+
+    % 2. MPU6050 雜訊與零偏 (Bias & Noise)
+    % 加速計零偏
+    bias_x = 0.12; noise_x = 0.05 * randn(); 
+    bias_y = -0.08; noise_y = 0.05 * randn();
+    bias_z = 0.15;  noise_z = 0.05 * randn();
+    
+    % 🌟 陀螺儀零偏 (這會自然導致積分後的角度產生嚴重飄移！)
+    bias_gz = 0.02; % 模擬每秒產生 0.02 rad 的靜態飄移
+    noise_gz = 0.01 * randn(); % 晶片高頻雜訊
+
+    % 3. 輸出最終的感測器讀值
+    ax = ((V - prev_V) / max(dt, 0.001)) + bias_x + noise_x;
+    ay = (V * true_W) + bias_y + noise_y;
+    az = 9.81 + bias_z + noise_z;
+    
+    % 🌟 輸出陀螺儀 Z 軸角速度 (rad/s)
+    gz = true_W + bias_gz + noise_gz;
+
+    prev_V = V;
+end
